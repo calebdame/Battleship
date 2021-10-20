@@ -173,9 +173,10 @@ class BattleshipAutoplay(BattleshipEnv):
     def __init__(self, dim=10, ships=[2,3,3,4,5], lag=2):
         super().__init__(dim, ships, lag)
         
-    def play(self, verbose=False, refresh=False):
-        if verbose:
+    def play(self, verbose=False, refresh=False, vverbose=False):
+        if vverbose:
             print(self.board)
+            verbose = vverbose
         while True:
             if len(self.hits) == np.sum(self.ships):
                 n = len(self.hits) + len(self.misses)
