@@ -14,9 +14,8 @@ class Battleship:
         self.names = list(string.ascii_lowercase[:len(ships)])
         self.sunkDict = dict(zip(self.names,[0 for i in ships]))
         self.shipLengths = dict(zip(self.names,ships))
-
         self.generateComponentLayouts()
-        self.getRandomOrders()
+        self.order = [x for _, x in sorted(zip(ships, self.names))]
         
         
     def generateComponentLayouts(self):
@@ -34,18 +33,8 @@ class Battleship:
             self.possibleShipsDict[name] = orientations
             self.possibleShipsNumDict[name] = len(orientations)
         
-        
-    def getRandomOrders(self):
-        permutation_obj = permutations(self.names)
-        permutation_list = list(permutation_obj)
-        self.numOrder = len(permutation_list)
-        self.orderDict = dict()
-        
-        for i in range(self.numOrder):
-            self.orderDict[i] = list(permutation_list[i])
-        
     def randomBoard(self):
-        order = self.orderDict[np.random.randint(self.numOrder)]
+        order = self.order.copy()
         final_set = set()
         self.boats = []
         for name in order:
@@ -64,6 +53,7 @@ class BattleshipEnv(Battleship):
         self.board = self.randomBoard()
         self.lag = lag
         self.hits = set()
+        self.hitsSunk = set()
         self.misses = set()
         self.possibleShipsDictCond = self.possibleShipsDict.copy()
         self.possibleShipsNumDictCond = self.possibleShipsNumDict.copy()
@@ -74,49 +64,59 @@ class BattleshipEnv(Battleship):
         for i in self.boats:
             boat, location = i
             if len(location.union(self.hits)) == len(self.hits):
+                self.hitsSunk= self.hitsSunk.union(location)
                 self.sunkDict[boat] = 1
                 self.possibleShipsDictCond[boat] = [location]
                 self.possibleShipsNumDictCond[boat] = 1
                 
+        sunkNum = len(self.hitsSunk)
+        
         for name in set(self.names):
             if self.sunkDict[name] != 1:
                 orientations = self.possibleShipsDictCond[name]
                 new_orient = []
                 for config in orientations:
-                    if len(self.misses.union(config)) == len(self.misses) + len(config):
+                    if (len(self.misses.union(config)) == len(self.misses) + self.shipLengths[name]) and (len(config.union(self.hitsSunk)) ==  self.shipLengths[name] + sunkNum):
                         new_orient += [config]
                 self.possibleShipsDictCond[name] = new_orient
                 self.possibleShipsNumDictCond[name] = len(new_orient)
 
+                
+    def randomSelection(self, order, mustHappen):
+        while 1:
+            final_set = mustHappen
+            for i in order:
+                t = time()
+                while 1:
+                    ship_coords = self.possibleShipsDictCond[i][np.random.randint(self.possibleShipsNumDictCond[i])]
+
+                    if len(final_set) + len(ship_coords) == len(final_set.union(ship_coords)):
+                        final_set = final_set.union(ship_coords)
+                        break
+
+                    if time() - t > self.lag/10:
+                        return set()
+
+            if len(final_set.difference(self.hits)) == len(final_set) - len(self.hits):
+                return list(final_set)
             
-    def randomConditionalBoard(self):
-        
-        order = self.orderDict[np.random.randint(self.numOrder)].copy()
+    def randomConditionalBoard(self, orderIncoming):
+        order = orderIncoming.copy()
         mustHappen = set()
         for i in self.sunkDict.items():
             if i[1]:
                 order.remove(i[0])
                 mustHappen = mustHappen.union(dict(self.boats)[i[0]]) 
         
-        while 1:
-            final_set = mustHappen
-            for i in order:
-                t = time()
-                while 1:
-                    if self.sunkDict[i] == 0:
-                        ship_coords = self.possibleShipsDictCond[i][np.random.randint(self.possibleShipsNumDictCond[i])]
-                    else:
-                        ship_coords = dict(self.boats)[i]
-
-                    if len(final_set) + len(ship_coords) == len(final_set.union(ship_coords)):
-                        final_set = final_set.union(ship_coords)
-                        break
-                        
-            if len(final_set.difference(self.hits)) == len(final_set) - len(self.hits):
-                return list(final_set)
+        final_set = set()
+        while len(final_set) == 0:
+            final_set = self.randomSelection(order, mustHappen)
+        return final_set
+            
     
     def buildAggBoard(self):
         
+        order = [k for k, v in sorted(self.possibleShipsNumDictCond.items(), key=lambda item: item[1])]
         start_time = time()
         
         self.updateOrientations()
@@ -124,7 +124,7 @@ class BattleshipEnv(Battleship):
         boards = []
         while time() - start_time < self.lag:
             numIter += 1
-            boards += self.randomConditionalBoard()
+            boards += self.randomConditionalBoard(order)
         
         self.aggDict = dict(Counter(boards).most_common(self.dim**2))
         self.numIter = numIter
@@ -159,7 +159,7 @@ class BattleshipEnv(Battleship):
 
         
     def guess(self, guessInx, showLoc = False):
-        #print(guessInx, "\n", self.board)
+        
         if guessInx in self.board:
             print("HIT")
             self.hits = self.hits.union({guessInx})
@@ -173,12 +173,15 @@ class BattleshipAutoplay(BattleshipEnv):
     def __init__(self, dim=10, ships=[2,3,3,4,5], lag=2):
         super().__init__(dim, ships, lag)
         
-    def play(self, verbose=False):
+    def play(self, verbose=False, refresh=False):
         if verbose:
             print(self.board)
         while True:
             if len(self.hits) == np.sum(self.ships):
-                return len(self.hits) + len(self.misses)
+                n = len(self.hits) + len(self.misses)
+                if refresh:
+                    self.refreshGame()
+                return n
             self.buildAggBoard()
             
             for i in self.hits:
@@ -186,7 +189,7 @@ class BattleshipAutoplay(BattleshipEnv):
             
             self.nextInx = max(self.aggDict, key=self.aggDict.get)
             if verbose:
-                print(self.nextInx, self.numIter)
+                print(self.nextInx, self.numIter, self.possibleShipsNumDictCond)
             if self.nextInx in self.board:
                 self.hits = self.hits.union({self.nextInx})
                 if verbose:
@@ -200,6 +203,7 @@ class BattleshipAutoplay(BattleshipEnv):
         self.board = self.randomBoard()
         self.hits = set()
         self.misses = set()
-        self.sunkDict = dict(zip(self.names,[0 for i in ships]))
+        self.sunkDict = dict(zip(self.names,[0 for i in self.ships]))
+        self.hitsSunk = set()
         self.possibleShipsDictCond = self.possibleShipsDict.copy()
         self.possibleShipsNumDictCond = self.possibleShipsNumDict.copy()
