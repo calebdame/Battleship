@@ -57,7 +57,8 @@ class BattleshipEnv(Battleship):
         self.misses = set()
         self.possibleShipsDictCond = self.possibleShipsDict.copy()
         self.possibleShipsNumDictCond = self.possibleShipsNumDict.copy()
-        
+        self.lastTurnBoards = list()
+        self.nextInx = (-1,-1)
         
     def updateOrientations(self):
         
@@ -120,12 +121,25 @@ class BattleshipEnv(Battleship):
         start_time = time()
         
         self.updateOrientations()
-        numIter = 0
-        boards = []
-        while time() - start_time < self.lag:
-            numIter += 1
-            boards += self.randomConditionalBoard(order)
         
+        lboards, boards = [], []
+        
+        if self.nextInx in self.hits:
+            lboards = [i for i in self.lastTurnBoards if self.nextInx in i]
+            boards = [j for i in lboards for j in list(i) if self.nextInx in i]
+            
+        if self.nextInx in self.misses:
+            lboards = [i for i in self.lastTurnBoards if self.nextInx not in i]
+            boards = [j for i in lboards for j in list(i) if self.nextInx not in i]
+        numIter = len(lboards)    
+            
+        while time() - start_time < self.lag*0.70:
+            numIter += 1
+            temp = self.randomConditionalBoard(order)
+            boards += temp
+            lboards += [set(temp)]
+            
+        self.lastTurnBoards = lboards
         self.aggDict = dict(Counter(boards).most_common(self.dim**2))
         self.numIter = numIter
 
@@ -159,7 +173,7 @@ class BattleshipEnv(Battleship):
 
         
     def guess(self, guessInx, showLoc = False):
-        
+        self.nextInx = guessInx
         if guessInx in self.board:
             print("HIT")
             self.hits = self.hits.union({guessInx})
@@ -173,10 +187,8 @@ class BattleshipAutoplay(BattleshipEnv):
     def __init__(self, dim=10, ships=[2,3,3,4,5], lag=2):
         super().__init__(dim, ships, lag)
         
-    def play(self, verbose=False, refresh=False, vverbose=False):
-        if vverbose:
-            print(self.board)
-            verbose = vverbose
+    def play(self, refresh=False):
+        
         while True:
             if len(self.hits) == np.sum(self.ships):
                 n = len(self.hits) + len(self.misses)
@@ -184,21 +196,15 @@ class BattleshipAutoplay(BattleshipEnv):
                     self.refreshGame()
                 return n
             self.buildAggBoard()
-            
             for i in self.hits:
                 del self.aggDict[i]
             
             self.nextInx = max(self.aggDict, key=self.aggDict.get)
-            if verbose:
-                print(self.nextInx, self.numIter, self.possibleShipsNumDictCond)
             if self.nextInx in self.board:
                 self.hits = self.hits.union({self.nextInx})
-                if verbose:
-                    print("HIT")
             else:
                 self.misses = self.misses.union({self.nextInx})
-                if verbose:
-                    print("MISS")
+
     
     def refreshGame(self):
         self.board = self.randomBoard()
@@ -208,3 +214,6 @@ class BattleshipAutoplay(BattleshipEnv):
         self.hitsSunk = set()
         self.possibleShipsDictCond = self.possibleShipsDict.copy()
         self.possibleShipsNumDictCond = self.possibleShipsNumDict.copy()
+        self.lastTurnBoards = list()
+        self.validLastTurnBoards = list()
+        self.nextInx = (-1,-1)
