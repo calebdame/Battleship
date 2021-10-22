@@ -46,7 +46,7 @@ class Battleship:
                     break
         return final_set
                 
-class BattleshipEnv(Battleship):
+class BattleshipPlayernv(Battleship):
     
     def __init__(self, dim=10, ships=[2,3,3,4,5], lag=2):
         super().__init__(dim, ships)
@@ -143,7 +143,7 @@ class BattleshipEnv(Battleship):
         self.aggDict = dict(Counter(boards).most_common(self.dim**2))
         self.numIter = numIter
 
-    def view(self, graph=False):
+    def view(self, showgraph=False):
         
         self.buildAggBoard()
         matrix = np.zeros((self.dim,self.dim))
@@ -172,7 +172,7 @@ class BattleshipEnv(Battleship):
         plt.show()
 
         
-    def guess(self, guessInx, showLoc = False):
+    def guess(self, guessInx):
         self.nextInx = guessInx
         if guessInx in self.board:
             print("HIT")
@@ -182,7 +182,7 @@ class BattleshipEnv(Battleship):
             self.misses = self.misses.union({guessInx})
 
             
-class BattleshipAutoplay(BattleshipEnv):
+class BattleshipAutoplay(BattleshipPlayer):
     
     def __init__(self, dim=10, ships=[2,3,3,4,5], lag=2):
         super().__init__(dim, ships, lag)
