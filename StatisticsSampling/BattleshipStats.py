@@ -143,14 +143,14 @@ class BattleshipPlayer(Battleship):
         self.aggDict = dict(Counter(boards).most_common(self.dim**2))
         self.numIter = numIter
 
-    def view(self, showgraph=False):
+    def view(self, showGraph=False):
         
         self.buildAggBoard()
         matrix = np.zeros((self.dim,self.dim))
         for location in self.aggDict.keys():
             matrix[location[0], location[1]] = self.aggDict[location]
         matrix = matrix / self.numIter
-        if graph:
+        if showGraph:
             self._print(matrix)
         print(self.numIter, "Iterations")
         self.maxInx = ((np.argmax(matrix) % self.dim), int(np.floor((np.argmax(matrix) / self.dim))))
