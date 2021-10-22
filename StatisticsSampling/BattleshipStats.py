@@ -46,7 +46,7 @@ class Battleship:
                     break
         return final_set
                 
-class BattleshipPlayernv(Battleship):
+class BattleshipPlayer(Battleship):
     
     def __init__(self, dim=10, ships=[2,3,3,4,5], lag=2):
         super().__init__(dim, ships)
